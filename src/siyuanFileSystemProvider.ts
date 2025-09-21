@@ -54,10 +54,13 @@ export class SiYuanFS implements vscode.FileSystemProvider {
 
             const files = await this.client.listFiles(path);
 
-            const result = files.map(file => [
-                file.name,
-                file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
-            ] as [string, vscode.FileType]);
+            const result = files.map(file => {
+                const displayName = file.type === 'directory' ? file.name : (file.name.endsWith('.md') ? file.name : file.name + '.md');
+                return [
+                    displayName,
+                    file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
+                ] as [string, vscode.FileType];
+            });
 
             return result;
         } catch (error: any) {
@@ -150,7 +153,6 @@ export class SiYuanFS implements vscode.FileSystemProvider {
             throw new Error(`Invalid URI scheme: ${uri.scheme}`);
         }
         const path = uri.path || '/';
-        this.logger.debug(`Getting path from URI: ${uri.toString()} -> ${path}`);
         return path;
     }
 
