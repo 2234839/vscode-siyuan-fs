@@ -47,6 +47,31 @@
 				"command": "siyuanfs.refresh",
 				"title": "Refresh Files",
 				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.manageConnections",
+				"title": "Manage Connections",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.addConnection",
+				"title": "Add Connection",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.selectConnection",
+				"title": "Select Active Connection",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.editConnection",
+				"title": "Edit Current Connection",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.testConnection",
+				"title": "Test Current Connection",
+				"category": "SiYuanFS"
 			}
 		],
 		"menus": {
@@ -65,8 +90,78 @@
 				},
 				{
 					"command": "siyuanfs.workspaceInit"
+				},
+				{
+					"command": "siyuanfs.manageConnections"
+				},
+				{
+					"command": "siyuanfs.addConnection"
+				},
+				{
+					"command": "siyuanfs.selectConnection"
+				},
+				{
+					"command": "siyuanfs.editConnection"
+				},
+				{
+					"command": "siyuanfs.testConnection"
 				}
 			]
+		},
+		"configuration": {
+			"title": "SiYuanFS",
+			"properties": {
+				"siyuanfs.connections": {
+					"type": "array",
+					"description": "List of SiYuan server connections",
+					"items": {
+						"type": "object",
+						"required": ["id", "name", "baseUrl", "apiToken", "timeout", "isActive", "createdAt"],
+						"properties": {
+							"id": {
+								"type": "string",
+								"description": "Unique identifier for the connection"
+							},
+							"name": {
+								"type": "string",
+								"description": "Display name for the connection"
+							},
+							"baseUrl": {
+								"type": "string",
+								"description": "Base URL of the SiYuan API"
+							},
+							"apiToken": {
+								"type": "string",
+								"description": "API token for authentication"
+							},
+							"timeout": {
+								"type": "number",
+								"description": "Request timeout in milliseconds",
+								"default": 10000
+							},
+							"isActive": {
+								"type": "boolean",
+								"description": "Whether this connection is currently active",
+								"default": false
+							},
+							"createdAt": {
+								"type": "number",
+								"description": "Timestamp when the connection was created"
+							},
+							"lastUsed": {
+								"type": "number",
+								"description": "Timestamp when the connection was last used"
+							}
+						}
+					},
+					"default": []
+				},
+				"siyuanfs.activeConnectionId": {
+					"type": ["string", "null"],
+					"description": "ID of the currently active connection",
+					"default": null
+				}
+			}
 		}
 	},
 	"scripts": {
