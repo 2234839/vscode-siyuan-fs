@@ -61,7 +61,7 @@ export class SiYuanFS implements vscode.FileSystemProvider {
 
             return result;
         } catch (error: any) {
-            this.logger.logFileSystemError('readDirectory', this.getPathFromUri(uri), error);
+            this.logger.error(`FileSystem Error: readDirectory ${this.getPathFromUri(uri)}`, error);
             throw vscode.FileSystemError.FileNotFound(uri);
         }
     }

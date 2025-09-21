@@ -78,16 +78,42 @@ export class Logger {
 
         const logEntry = `[${timestamp}] [${levelName}] ${formattedMessage}`;
 
-        // Always log to console for debugging
-        console.log(logEntry);
+        // Always log to console for debugging with colors
+        this.logToConsole(logEntry, level);
 
-        // Log to VSCode output panel
-        this.outputChannel.appendLine(logEntry);
+        // Log to VSCode output panel with ANSI colors
+        this.logToOutputPanel(logEntry, level);
 
         // Show error messages in VSCode notifications (without args for cleaner display)
         if (level === LogLevel.ERROR) {
             vscode.window.showErrorMessage(`SiYuanFS Error: ${message}`);
         }
+    }
+
+    private logToConsole(logEntry: string, level: LogLevel): void {
+        const colors = {
+            [LogLevel.DEBUG]: '\x1b[90m', // Gray
+            [LogLevel.INFO]: '\x1b[36m',   // Cyan
+            [LogLevel.WARN]: '\x1b[33m',   // Yellow
+            [LogLevel.ERROR]: '\x1b[31m'   // Red
+        };
+
+        const reset = '\x1b[0m';
+        const color = colors[level] || '';
+
+        console.log(`${color}${logEntry}${reset}`);
+    }
+
+    private logToOutputPanel(logEntry: string, level: LogLevel): void {
+        const symbols = {
+            [LogLevel.DEBUG]: '🔍',
+            [LogLevel.INFO]: 'ℹ️',
+            [LogLevel.WARN]: '⚠️',
+            [LogLevel.ERROR]: '❌'
+        };
+
+        const symbol = symbols[level] || '';
+        this.outputChannel.appendLine(`${symbol} ${logEntry}`);
     }
 
     show(): void {
@@ -98,27 +124,7 @@ export class Logger {
         this.outputChannel.dispose();
     }
 
-    // Utility methods for common logging scenarios
-    logApiCall(method: string, endpoint: string, data?: any): void {
-        this.debug(`API Call: ${method} ${endpoint}`, data ? { data } : '');
-    }
-
-    logApiResponse(method: string, endpoint: string, response?: any): void {
-        this.debug(`API Response: ${method} ${endpoint}`, response ? { response } : '');
-    }
-
-    logApiError(method: string, endpoint: string, error: any): void {
-        this.error(`API Error: ${method} ${endpoint}`, error);
-    }
-
-    logFileSystemOperation(operation: string, path: string, details?: any): void {
-        this.info(`FileSystem: ${operation} ${path}`, details || '');
-    }
-
-    logFileSystemError(operation: string, path: string, error: any): void {
-        this.error(`FileSystem Error: ${operation} ${path}`, error);
-    }
-}
+  }
 
 export enum LogLevel {
     DEBUG = 0,

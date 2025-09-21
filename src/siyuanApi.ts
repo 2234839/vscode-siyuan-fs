@@ -57,302 +57,129 @@ export class SiYuanApiClient {
 
       throw new Error('Invalid API response format');
     } else {
-      // For other paths, get IDs first then use real API
-      const pathParts = path.split('/').filter(Boolean);
-      if (pathParts.length > 0) {
-        try {
-          // Get notebook ID from cache or API
-          let notebookId = this.notebookCache.get(pathParts[0]);
-          if (!notebookId) {
-            const rootResponse = await this.request<{
-              data: {
-                notebooks: { id: string; name: string }[];
-              };
-            }>('/api/notebook/lsNotebooks');
+      // For other paths, use the new abstract path conversion method
+      try {
+        const { notebookId, realPath } = await this.convertPathToRealPath(path);
+        const isFolderPath = path.endsWith('.folder');
 
-            if (rootResponse?.data?.notebooks) {
-              const notebook = rootResponse.data.notebooks.find((nb) => nb.name === pathParts[0]);
-              notebookId = notebook?.id;
-              if (notebook) {
-                this.notebookCache.set(notebook.name, notebook.id);
-              }
-            }
-          }
+        this.logger.debug('Using converted path', {
+          originalPath: path,
+          notebookId,
+          realPath,
+          isFolderPath,
+        });
 
-          if (notebookId) {
-            // Handle nested .folder paths - represents a document hierarchy with subdocuments
-            // The key insight: each level of path must be converted to an ID to build the final queryPath
-            let isFolderPath = false;
-            let queryPath = '/';
-            let targetDocName = '';
+        const response = await this.request<{
+          code: number;
+          msg: string;
+          data: {
+            box: string;
+            files: Array<{
+              id: string;
+              name: string;
+              path: string;
+              size: number;
+              mtime: number;
+              ctime: number;
+              subFileCount?: number;
+            }>;
+          };
+        }>('/api/filetree/listDocsByPath', {
+          notebook: notebookId,
+          path: realPath,
+        });
 
-            // Check if the last part ends with .folder
-            const isLastPartFolder =
-              pathParts.length > 0 && pathParts[pathParts.length - 1].endsWith('.folder');
-            isFolderPath = isLastPartFolder;
+        if (response?.code === 0 && response?.data?.files) {
+          const result: SiYuanFSFile[] = [];
 
-            if (isFolderPath && pathParts.length > 1) {
-              // Extract notebook name and path parts
-              const notebookName = pathParts[0];
-              const documentPathParts = pathParts.slice(1, -1); // Remove notebook and .folder suffix
-              targetDocName = pathParts[pathParts.length - 1].replace('.folder', '');
-
-              this.logger.debug('Processing nested .folder path', {
-                notebookName,
-                documentPathParts,
-                targetDocName,
-                originalPath: path,
-              });
-
-              // For .folder paths, we need to get the parent path (all parts except the last .folder)
-              // and the target document ID separately
-              let parentPath = '/';
-              let targetDocId = '';
-
-              if (documentPathParts.length > 0) {
-                // Build parent path incrementally - parent paths should NOT have .sy extension
-                let currentPath = '';
-                let currentRealPath = '/';
-
-                for (let i = 0; i < documentPathParts.length; i++) {
-                  const part = documentPathParts[i].replace('.folder', '');
-                  currentPath = currentPath ? `${currentPath}/${part}` : part;
-                  const hPath = `/${currentPath}`;
-
-                  try {
-                    this.logger.debug('Converting parent path part to real path', { hPath, part });
-                    const pathIds = await this.getIDsByHPath(hPath, notebookId);
-                    if (pathIds.length > 0) {
-                      // Parent paths should NOT have .sy extension
-                      if (currentRealPath === '/') {
-                        currentRealPath = `/${pathIds[0]}`;
-                      } else {
-                        currentRealPath = `${currentRealPath}/${pathIds[0]}`;
-                      }
-                      this.logger.debug('Converted parent path part', {
-                        part,
-                        realPath: currentRealPath,
-                      });
-                    } else {
-                      this.logger.warn('Could not convert parent path part', { hPath });
-                      break;
-                    }
-                  } catch (error) {
-                    this.logger.warn('Error converting parent path part', { hPath, error });
-                    break;
-                  }
-                }
-
-                parentPath = currentRealPath;
-              }
-
-              // Now get the target document ID
-              const targetHPath =
-                '/' +
-                pathParts
-                  .slice(1)
-                  .map((part) => part.replace('.folder', ''))
-                  .join('/');
-              try {
-                this.logger.debug('Getting target document ID', {
-                  targetHPath,
-                  pathParts,
-                  cleanParts: pathParts.slice(1).map((part) => part.replace('.folder', '')),
-                });
-                const targetIds = await this.getIDsByHPath(targetHPath, notebookId);
-                this.logger.debug('getIDsByHPath result', { targetIds, targetHPath });
-                if (targetIds.length > 0) {
-                  targetDocId = targetIds[0];
-                  this.logger.debug('Found target document ID', { targetDocId });
-                } else {
-                  this.logger.warn('No target IDs found for HPath', { targetHPath });
-                }
-              } catch (error) {
-                this.logger.warn('Failed to get target document ID', { error, targetHPath });
-              }
-
-              // Build the final queryPath: parentPath + targetDocId + .sy
-              if (targetDocId) {
-                if (parentPath === '/') {
-                  queryPath = `/${targetDocId}.sy`;
-                } else {
-                  queryPath = `${parentPath}/${targetDocId}.sy`;
-                }
-                this.logger.debug('Built final queryPath for .folder', {
-                  parentPath,
-                  targetDocId,
-                  queryPath,
-                });
-              } else {
-                queryPath = parentPath;
-                this.logger.debug('No target document ID found, using parent path', { queryPath });
-              }
-            } else {
-              // Normal path - convert directly by building path incrementally
-              const cleanPathParts = pathParts.slice(1).map((part) => part.replace('.folder', ''));
-
-              if (cleanPathParts.length > 0) {
-                let currentPath = '';
-                let currentRealPath = '/';
-
-                for (let i = 0; i < cleanPathParts.length; i++) {
-                  const part = cleanPathParts[i];
-                  currentPath = currentPath ? `${currentPath}/${part}` : part;
-                  const hPath = `/${currentPath}`;
-
-                  try {
-                    this.logger.debug('Converting normal path part to real path', { hPath, part });
-                    const pathIds = await this.getIDsByHPath(hPath, notebookId);
-                    if (pathIds.length > 0) {
-                      // For normal paths, all parent parts should NOT have .sy extension
-                      // Only the final part (if it's the last one) should have .sy
-                      if (i === cleanPathParts.length - 1) {
-                        // Last part gets .sy extension
-                        if (currentRealPath === '/') {
-                          currentRealPath = `/${pathIds[0]}.sy`;
-                        } else {
-                          currentRealPath = `${currentRealPath}/${pathIds[0]}.sy`;
-                        }
-                      } else {
-                        // Parent parts don't get .sy extension
-                        if (currentRealPath === '/') {
-                          currentRealPath = `/${pathIds[0]}`;
-                        } else {
-                          currentRealPath = `${currentRealPath}/${pathIds[0]}`;
-                        }
-                      }
-                      this.logger.debug('Converted normal path part', {
-                        part,
-                        realPath: currentRealPath,
-                        isLast: i === cleanPathParts.length - 1,
-                      });
-                    } else {
-                      this.logger.warn('Could not convert normal path part', { hPath });
-                      break;
-                    }
-                  } catch (error) {
-                    this.logger.warn('Error converting normal path part', { hPath, error });
-                    break;
-                  }
-                }
-
-                queryPath = currentRealPath;
-              }
-            }
-
-            this.logger.debug('Final path conversion', {
-              isFolderPath,
-              queryPath,
-              targetDocName,
-              originalPath: path,
+          // For .folder queries, we already queried the target document, so just return its subdocuments
+          if (isFolderPath) {
+            this.logger.debug('Processing .folder query results', {
+              realPath,
+              fileCount: response.data.files.length,
             });
 
-            const response = await this.request<{
-              code: number;
-              msg: string;
-              data: {
-                box: string;
-                files: Array<{
-                  id: string;
-                  name: string;
-                  path: string;
-                  size: number;
-                  mtime: number;
-                  ctime: number;
-                  subFileCount?: number;
-                }>;
-              };
-            }>('/api/filetree/listDocsByPath', {
-              notebook: notebookId,
-              path: queryPath,
-            });
+            // Return the subdocuments directly
+            response.data.files.forEach((file) => {
+              const displayName = file.name.replace('.sy', '');
+              result.push({
+                name: displayName,
+                type: 'file' as const,
+                size: file.size,
+                ctime: file.ctime * 1000,
+                mtime: file.mtime * 1000,
+              });
 
-            if (response?.code === 0 && response?.data?.files) {
-              const result: SiYuanFSFile[] = [];
-
-              // For .folder queries, we already queried the target document, so just return its subdocuments
-              if (isFolderPath) {
-                this.logger.debug('Processing .folder query results', {
-                  queryPath,
-                  fileCount: response.data.files.length,
-                  targetDocName,
-                });
-
-                // Return the subdocuments directly
-                response.data.files.forEach((file) => {
-                  const displayName = file.name.replace('.sy', '');
-                  result.push({
-                    name: displayName,
-                    type: 'file' as const,
-                    size: file.size,
-                    ctime: file.ctime * 1000,
-                    mtime: file.mtime * 1000,
-                  });
-
-                  // If subdocument has its own subdocuments, add as folder too
-                  if (file.subFileCount !== undefined && file.subFileCount > 0) {
-                    result.push({
-                      name: displayName + '.folder',
-                      type: 'directory' as const,
-                      size: 0,
-                      ctime: file.ctime * 1000,
-                      mtime: file.mtime * 1000,
-                    });
-                  }
-                });
-              } else {
-                // Normal file query - return both files and folders
-                response.data.files.forEach((file) => {
-                  const displayName = file.name.replace('.sy', '');
-                  result.push({
-                    name: displayName,
-                    type: 'file' as const,
-                    size: file.size,
-                    ctime: file.ctime * 1000, // Convert to milliseconds
-                    mtime: file.mtime * 1000, // Convert to milliseconds
-                  });
-
-                  // If it has subFileCount > 0, also add it as a folder
-                  if (file.subFileCount !== undefined && file.subFileCount > 0) {
-                    result.push({
-                      name: displayName + '.folder', // Add suffix to avoid naming conflict
-                      type: 'directory' as const,
-                      size: 0,
-                      ctime: file.ctime * 1000,
-                      mtime: file.mtime * 1000,
-                    });
-                  }
+              // If subdocument has its own subdocuments, add as folder too
+              if (file.subFileCount !== undefined && file.subFileCount > 0) {
+                result.push({
+                  name: displayName + '.folder',
+                  type: 'directory' as const,
+                  size: 0,
+                  ctime: file.ctime * 1000,
+                  mtime: file.mtime * 1000,
                 });
               }
-
-              this.logger.debug('/api/filetree/listDocsByPath', {
-                path,
-                notebookId,
-                queryPath,
-                result,
+            });
+          } else {
+            // Normal file query - return both files and folders
+            response.data.files.forEach((file) => {
+              const displayName = file.name.replace('.sy', '');
+              result.push({
+                name: displayName,
+                type: 'file' as const,
+                size: file.size,
+                ctime: file.ctime * 1000, // Convert to milliseconds
+                mtime: file.mtime * 1000, // Convert to milliseconds
               });
-              return result;
-            }
+
+              // If it has subFileCount > 0, also add it as a folder
+              if (file.subFileCount !== undefined && file.subFileCount > 0) {
+                result.push({
+                  name: displayName + '.folder', // Add suffix to avoid naming conflict
+                  type: 'directory' as const,
+                  size: 0,
+                  ctime: file.ctime * 1000,
+                  mtime: file.mtime * 1000,
+                });
+              }
+            });
           }
-        } catch (error) {
-          this.logger.error('Failed to list real files for path', { path, error });
+
+          this.logger.debug('/api/filetree/listDocsByPath', {
+            path,
+            notebookId,
+            realPath,
+            result,
+          });
+          return result;
         }
+      } catch (error) {
+        this.logger.error('Failed to list real files for path', { path, error });
       }
-
-      // Fallback to simulation
-      const result = await this.request<SiYuanFSFile[]>('/api/filetree/listFiles', { path });
-      this.logger.debug('/api/filetree/listFiles', `Fallback simulation for path: ${path}`);
-      return result;
     }
+
+    // Fallback to simulation
+    const result = await this.request<SiYuanFSFile[]>('/api/filetree/listFiles', { path });
+    this.logger.debug('/api/filetree/listFiles', `Fallback simulation for path: ${path}`);
+    return result;
   }
 
   async getFileContent(path: string): Promise<string> {
+    // Convert path to get the block ID
+    const { realPath } = await this.convertPathToRealPath(path);
+
+    // Extract block ID from realPath (remove .sy extension if present)
+    let blockId = realPath.split('/').pop()!.replace(/\.sy$/, '');
+
     const response = await this.request<{
       data: {
-        id: '20201225220955-l154bn4';
-        kramdown: '* {: id="20201225220955-2nn1mns"}新建笔记本，在笔记本下新建文档\n  {: id="20210131155408-3t627wc"}\n* {: id="20201225220955-uwhqnug"}在编辑器中输入 <kbd>/</kbd> 触发功能菜单\n  {: id="20210131155408-btnfw88"}\n* {: id="20201225220955-04ymi2j"}((20200813131152-0wk5akh "在内容块中遨游"))、((20200822191536-rm6hwid "窗口和页签"))\n  {: id="20210131155408-hh1z442"}';
+        id: string;
+        kramdown: string;
       };
-    }>('/api/block/getBlockKramdown', { path });
+    }>('/api/block/getBlockKramdown', { id: blockId });
+
+    this.logger.debug('getBlockKramdown', { blockId, response });
     return response.data.kramdown;
   }
 
@@ -516,69 +343,62 @@ export class SiYuanApiClient {
       }
     }
 
-    // For any other case, use listDocsByPath to derive file info
+    // For any other case, use the new abstract path conversion method
     try {
+      const { notebookId, realPath } = await this.convertPathToRealPath(path);
+
+      // Get parent path for listing
       const pathParts = path.split('/').filter(Boolean);
-      if (pathParts.length >= 2) {
-        const notebookName = pathParts[0];
-        const notebookId = this.notebookCache.get(notebookName);
+      const parentPath = pathParts.length > 1 ? '/' + pathParts.slice(0, -1).join('/') : '/';
 
-        if (notebookId) {
-          // Convert human-readable parent path to real SiYuan file path
-          const parentHPath = '/' + pathParts.slice(1, -1).join('/');
-          let parentRealPath = '/';
-
-          if (parentHPath !== '/') {
-            try {
-              const parentIds = await this.getIDsByHPath(parentHPath, notebookId);
-              if (parentIds.length > 0) {
-                parentRealPath = `/${parentIds[0]}.sy`;
-              }
-            } catch (error) {
-              this.logger.warn('Failed to get parent real path in getFileStats', {
-                parentHPath,
-                error,
-              });
-            }
-          }
-
-          const listResponse = await this.request<{
-            code: number;
-            msg: string;
-            data: {
-              box: string;
-              files: Array<{
-                id: string;
-                name: string;
-                path: string;
-                size: number;
-                mtime: number;
-                ctime: number;
-                subFileCount?: number;
-              }>;
-            };
-          }>('/api/filetree/listDocsByPath', {
-            notebook: notebookId,
-            path: parentRealPath,
+      let parentRealPath = '/';
+      if (parentPath !== '/') {
+        try {
+          const { realPath: parentReal } = await this.convertPathToRealPath(parentPath);
+          parentRealPath = parentReal;
+        } catch (error) {
+          this.logger.warn('Failed to get parent real path in getFileStats', {
+            parentPath,
+            error,
           });
+        }
+      }
 
-          if (listResponse?.code === 0 && listResponse?.data?.files) {
-            const targetFile = listResponse.data.files.find(
-              (file) =>
-                file.name === pathParts[pathParts.length - 1] ||
-                file.name + '.folder' === pathParts[pathParts.length - 1],
-            );
+      const listResponse = await this.request<{
+        code: number;
+        msg: string;
+        data: {
+          box: string;
+          files: Array<{
+            id: string;
+            name: string;
+            path: string;
+            size: number;
+            mtime: number;
+            ctime: number;
+            subFileCount?: number;
+          }>;
+        };
+      }>('/api/filetree/listDocsByPath', {
+        notebook: notebookId,
+        path: parentRealPath,
+      });
 
-            if (targetFile) {
-              return {
-                name: pathParts[pathParts.length - 1],
-                type: targetFile.subFileCount !== undefined ? 'directory' : 'file',
-                size: targetFile.size,
-                ctime: targetFile.ctime * 1000,
-                mtime: targetFile.mtime * 1000,
-              };
-            }
-          }
+      if (listResponse?.code === 0 && listResponse?.data?.files) {
+        const targetFile = listResponse.data.files.find(
+          (file) =>
+            file.name === pathParts[pathParts.length - 1] ||
+            file.name + '.folder' === pathParts[pathParts.length - 1],
+        );
+
+        if (targetFile) {
+          return {
+            name: pathParts[pathParts.length - 1],
+            type: targetFile.subFileCount !== undefined ? 'directory' : 'file',
+            size: targetFile.size,
+            ctime: targetFile.ctime * 1000,
+            mtime: targetFile.mtime * 1000,
+          };
         }
       }
     } catch (error) {
@@ -661,7 +481,6 @@ export class SiYuanApiClient {
       }
 
       const result = await response.json();
-      this.logger.debug(`Request completed: ${endpoint}`, result);
       return result as T;
     } catch (error) {
       this.logger.error(`Request failed: ${endpoint}`, error);
@@ -678,6 +497,117 @@ export class SiYuanApiClient {
   }
 
   // Utility methods for ID resolution
+
+  /**
+   * Convert human-readable path to SiYuan real path with IDs
+   * @param path Human-readable path (e.g., '/notebook/doc/subdoc')
+   * @returns Object containing notebookId and converted realPath
+   */
+  async convertPathToRealPath(path: string): Promise<{ notebookId: string; realPath: string }> {
+    this.logger.debug('convertPathToRealPath', { path });
+
+    const pathParts = path.split('/').filter(Boolean);
+    if (pathParts.length === 0) {
+      throw new Error('Invalid path format');
+    }
+
+    // Get notebook ID
+    let notebookId = this.notebookCache.get(pathParts[0]);
+    if (!notebookId) {
+      const rootResponse = await this.request<{
+        data: {
+          notebooks: { id: string; name: string }[];
+        };
+      }>('/api/notebook/lsNotebooks');
+
+      if (rootResponse?.data?.notebooks) {
+        const notebook = rootResponse.data.notebooks.find((nb) => nb.name === pathParts[0]);
+        notebookId = notebook?.id;
+        if (notebook) {
+          this.notebookCache.set(notebook.name, notebook.id);
+        }
+      }
+    }
+
+    if (!notebookId) {
+      throw new Error(`Notebook not found: ${pathParts[0]}`);
+    }
+
+    // For root notebook path, return '/'
+    if (pathParts.length === 1) {
+      return { notebookId, realPath: '/' };
+    }
+
+    // Check if it's a .folder path
+    const isFolderPath = pathParts[pathParts.length - 1].endsWith('.folder');
+    const cleanPathParts = pathParts.slice(1).map((part) => part.replace('.folder', ''));
+
+    if (isFolderPath) {
+      // Handle .folder path - convert parent path and get target document ID
+      const parentPathParts = cleanPathParts.slice(0, -1);
+      const targetDocName = cleanPathParts[cleanPathParts.length - 1];
+
+      // Build parent real path
+      let parentRealPath = '/';
+      if (parentPathParts.length > 0) {
+        let currentPath = '';
+        for (const part of parentPathParts) {
+          currentPath = currentPath ? `${currentPath}/${part}` : part;
+          const hPath = `/${currentPath}`;
+          const pathIds = await this.getIDsByHPath(hPath, notebookId);
+          if (pathIds.length > 0) {
+            if (parentRealPath === '/') {
+              parentRealPath = `/${pathIds[0]}`;
+            } else {
+              parentRealPath = `${parentRealPath}/${pathIds[0]}`;
+            }
+          } else {
+            throw new Error(`Cannot find path: ${hPath}`);
+          }
+        }
+      }
+
+      // Get target document ID
+      const targetHPath = `/${cleanPathParts.join('/')}`;
+      const targetIds = await this.getIDsByHPath(targetHPath, notebookId);
+      if (targetIds.length === 0) {
+        throw new Error(`Cannot find target document: ${targetHPath}`);
+      }
+
+      // Build final real path with .sy extension
+      const finalPath =
+        parentRealPath === '/' ? `/${targetIds[0]}.sy` : `${parentRealPath}/${targetIds[0]}.sy`;
+
+      return { notebookId, realPath: finalPath };
+    } else {
+      // Handle normal path - convert incrementally
+      let currentRealPath = '/';
+      let currentPath = '';
+
+      for (let i = 0; i < cleanPathParts.length; i++) {
+        const part = cleanPathParts[i];
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        const hPath = `/${currentPath}`;
+        const pathIds = await this.getIDsByHPath(hPath, notebookId);
+
+        if (pathIds.length > 0) {
+          const isLastPart = i === cleanPathParts.length - 1;
+          const idWithExtension = isLastPart ? `${pathIds[0]}.sy` : pathIds[0];
+
+          if (currentRealPath === '/') {
+            currentRealPath = `/${idWithExtension}`;
+          } else {
+            currentRealPath = `${currentRealPath}/${idWithExtension}`;
+          }
+        } else {
+          throw new Error(`Cannot find path: ${hPath}`);
+        }
+      }
+
+      return { notebookId, realPath: currentRealPath };
+    }
+  }
+
   async getIDsByHPath(path: string, notebookId?: string): Promise<string[]> {
     try {
       // If notebookId is not provided, try to extract it from path using cache
