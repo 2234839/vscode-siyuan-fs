@@ -1,0 +1,82 @@
+{
+	"name": "vscode-siyuanfs",
+	"displayName": "SiYuanFS - a HTTP-based file system provider",
+	"description": "Virtual file system provider for SiYuan笔记 using HTTP API.",
+	"version": "0.0.3",
+	"publisher": "vscode-samples",
+	"private": true,
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Microsoft/vscode-extension-samples"
+	},
+	"engines": {
+		"vscode": "^1.100.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onFileSystem:siyuanfs",
+		"*"
+	],
+	"main": "./out/src/extension",
+	"contributes": {
+		"commands": [
+			{
+				"command": "siyuanfs.workspaceInit",
+				"title": "Setup Workspace",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.init",
+				"title": "Initialize Connection",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.reset",
+				"title": "Reset Connection",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.config",
+				"title": "Configure API Settings",
+				"category": "SiYuanFS"
+			},
+			{
+				"command": "siyuanfs.refresh",
+				"title": "Refresh Files",
+				"category": "SiYuanFS"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "siyuanfs.init"
+				},
+				{
+					"command": "siyuanfs.reset"
+				},
+				{
+					"command": "siyuanfs.config"
+				},
+				{
+					"command": "siyuanfs.refresh"
+				},
+				{
+					"command": "siyuanfs.workspaceInit"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./"
+	},
+	"devDependencies": {
+		"@types/node": "^22",
+		"@types/vscode": "^1.100.0",
+		"typescript": "^5.9.2"
+	}
+}
