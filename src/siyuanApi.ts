@@ -18,17 +18,30 @@ export class SiYuanApiClient {
 
     // For root path, use real SiYuan API
     if (path === '/') {
-      const response = await this.request<any>('/api/notebook/lsNotebooks');
-      this.logger.logApiCall('lsNoteBooks', response);
+      const response = await this.request<{
+        data: {
+          notebooks: {
+            id: '20240705122434-xzm9uhi';
+            name: string;
+            icon: '';
+            sort: 0;
+            sortMode: 15;
+            closed: false;
+            newFlashcardCount: 0;
+            dueFlashcardCount: 0;
+            flashcardCount: 0;
+          }[];
+        };
+      }>('/api/notebook/lsNotebooks');
       if (response && response.data && Array.isArray(response.data.notebooks)) {
-        const result = response.data.notebooks.map((notebook: any) => ({
+        const result = response.data.notebooks.map((notebook) => ({
           name: notebook.name,
-          type: 'directory',
+          type: 'directory' as const,
           size: 0,
-          ctime: notebook.created ? new Date(notebook.created).getTime() : Date.now(),
-          mtime: notebook.updated ? new Date(notebook.updated).getTime() : Date.now(),
+          ctime: paserIdDate(notebook.id).getTime(),
+          mtime: paserIdDate(notebook.id).getTime(),
         }));
-        this.logger.logApiResponse('/api/notebook/lsNotebooks', `Real API call for path: ${path}`);
+        this.logger.debug('call：/api/notebook/lsNotebooks', { response, result });
         return result;
       }
 
@@ -210,108 +223,6 @@ export class SiYuanApiClient {
     return { success: true, message: 'Operation completed' };
   }
 
-  // Simulation methods - these will be replaced with real API calls
-  private simulateListFiles(path: string): SiYuanFSFile[] {
-    const mockFiles: Record<string, SiYuanFSFile[]> = {
-      '/': [
-        {
-          name: 'file.txt',
-          type: 'file',
-          size: 42,
-          ctime: Date.now() - 86400000,
-          mtime: Date.now() - 3600000,
-        },
-        {
-          name: 'README.md',
-          type: 'file',
-          size: 128,
-          ctime: Date.now() - 172800000,
-          mtime: Date.now() - 7200000,
-        },
-        {
-          name: 'documents',
-          type: 'directory',
-          size: 0,
-          ctime: Date.now() - 259200000,
-          mtime: Date.now() - 10800000,
-        },
-        {
-          name: 'src',
-          type: 'directory',
-          size: 0,
-          ctime: Date.now() - 345600000,
-          mtime: Date.now() - 14400000,
-        },
-      ],
-      '/documents': [
-        {
-          name: 'note1.md',
-          type: 'file',
-          size: 256,
-          ctime: Date.now() - 432000000,
-          mtime: Date.now() - 18000000,
-        },
-        {
-          name: 'note2.md',
-          type: 'file',
-          size: 512,
-          ctime: Date.now() - 518400000,
-          mtime: Date.now() - 21600000,
-        },
-        {
-          name: 'projects',
-          type: 'directory',
-          size: 0,
-          ctime: Date.now() - 604800000,
-          mtime: Date.now() - 25200000,
-        },
-      ],
-      '/documents/projects': [
-        {
-          name: 'project1.md',
-          type: 'file',
-          size: 1024,
-          ctime: Date.now() - 691200000,
-          mtime: Date.now() - 28800000,
-        },
-        {
-          name: 'project2.md',
-          type: 'file',
-          size: 2048,
-          ctime: Date.now() - 777600000,
-          mtime: Date.now() - 32400000,
-        },
-      ],
-      '/src': [
-        {
-          name: 'main.ts',
-          type: 'file',
-          size: 89,
-          ctime: Date.now() - 864000000,
-          mtime: Date.now() - 36000000,
-        },
-        {
-          name: 'utils',
-          type: 'directory',
-          size: 0,
-          ctime: Date.now() - 950400000,
-          mtime: Date.now() - 39600000,
-        },
-      ],
-      '/src/utils': [
-        {
-          name: 'helper.ts',
-          type: 'file',
-          size: 156,
-          ctime: Date.now() - 1036800000,
-          mtime: Date.now() - 43200000,
-        },
-      ],
-    };
-
-    return mockFiles[path] || [];
-  }
-
   private simulateGetFileContent(path: string): string {
     const mockContents: Record<string, string> = {
       '/file.txt': 'Hello from SiYuanFS Virtual File System!',
@@ -397,4 +308,8 @@ export class SiYuanApiClient {
   getConfig(): SiYuanFSConfig {
     return { ...this.config };
   }
+}
+
+function paserIdDate(id: `${string}-${string}`) {
+  return new Date(id.split('-')[0]);
 }
