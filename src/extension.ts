@@ -251,21 +251,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 		await connectionManager.testConnectionWithFeedback(activeConnection);
 	}));
-
-	// Test direct URI access
-	setTimeout(async () => {
-		try {
-			logger.info('Testing direct URI access...');
-			const testUri = vscode.Uri.parse('siyuanfs:/');
-			const stats = await vscode.workspace.fs.stat(testUri);
-			logger.info('Direct URI stat successful:', stats);
-
-			const entries = await vscode.workspace.fs.readDirectory(testUri);
-			logger.info('Direct URI readDirectory successful:', entries);
-		} catch (error: any) {
-			logger.error('Direct URI access failed:', error);
-		}
-	}, 1000);
 }
 
 export function deactivate() {

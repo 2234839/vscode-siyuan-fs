@@ -33,20 +33,7 @@ export class SiYuanFS implements vscode.FileSystemProvider {
         this.config = config;
         this.logger = Logger.getInstance();
         this.client = new SiYuanFSHttpClient(config);
-        this.logger.info('SiYuanFS file system provider initialized', { config });
-
-        // Test the connection immediately
-        this.testConnection();
-    }
-
-    private async testConnection(): Promise<void> {
-        try {
-            this.logger.info('Testing SiYuanFS connection...');
-            const files = await this.client.listFiles('/');
-            this.logger.info(`Connection test successful: Found ${files.length} files in root`, files);
-        } catch (error: any) {
-            this.logger.error('Connection test failed:', error);
-        }
+        this.logger.info('SiYuanFS file system provider initialized');
     }
 
     // --- manage file metadata
@@ -64,34 +51,16 @@ export class SiYuanFS implements vscode.FileSystemProvider {
     async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         try {
             const path = this.getPathFromUri(uri);
-            this.logger.logFileSystemOperation('readDirectory', path);
 
-            this.logger.debug(`Calling client.listFiles for path: ${path}`);
             const files = await this.client.listFiles(path);
-            this.logger.debug(`client.listFiles returned:`, files);
-            this.logger.debug(`Found ${files.length} files in ${path}:`, files);
-            this.logger.debug(`File array type: ${Array.isArray(files)}, First file:`, files[0]);
 
-            if (!Array.isArray(files)) {
-                throw new Error(`Expected array but got ${typeof files}`);
-            }
+            const result = files.map(file => [
+                file.name,
+                file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
+            ] as [string, vscode.FileType]);
 
-            const result: [string, vscode.FileType][] = [];
-            for (const file of files) {
-                this.logger.debug(`Processing file:`, file);
-                const entry: [string, vscode.FileType] = [
-                    file.name,
-                    file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
-                ];
-                result.push(entry);
-                this.logger.debug(`Added entry:`, entry);
-            }
-
-            this.logger.debug('Returning directory entries:', result);
-            this.logger.debug(`Result array type: ${Array.isArray(result)}, First entry:`, result[0]);
             return result;
         } catch (error: any) {
-            this.logger.error(`readDirectory failed for path ${this.getPathFromUri(uri)}:`, error);
             this.logger.logFileSystemError('readDirectory', this.getPathFromUri(uri), error);
             throw vscode.FileSystemError.FileNotFound(uri);
         }
