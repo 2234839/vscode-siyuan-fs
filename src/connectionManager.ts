@@ -347,9 +347,21 @@ export class ConnectionManager {
 
     private async testConnection(connection: SiYuanConnection): Promise<boolean> {
         try {
-            // For now, simulate a connection test
-            // In a real implementation, this would use the actual API client
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Use real API call to test connection
+            const { SiYuanApiClient } = await import('./siyuanApi');
+
+            const config = {
+                baseUrl: connection.baseUrl,
+                apiToken: connection.apiToken,
+                timeout: connection.timeout
+            };
+
+            const client = new SiYuanApiClient(config);
+
+            // Test the connection by calling getNotebookList API
+            await client.getNotebookList();
+
+            this.logger.info('Connection test successful', { connectionId: connection.id });
             return true;
         } catch (error) {
             this.logger.error('Connection test failed', { connectionId: connection.id, error });

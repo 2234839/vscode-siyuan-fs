@@ -9,7 +9,7 @@ export class Logger {
 
     private constructor() {
         this.outputChannel = vscode.window.createOutputChannel('SiYuanFS');
-        this.logLevel = LogLevel.INFO;
+        this.logLevel = LogLevel.DEBUG;
     }
 
     static getInstance(): Logger {
@@ -47,8 +47,33 @@ export class Logger {
 
         const timestamp = new Date().toISOString();
         const levelName = LogLevel[level];
+
+        // Better object serialization with circular reference handling
+        const formatArg = (arg: any): string => {
+            if (arg === null || arg === undefined) {
+                return String(arg);
+            }
+
+            if (typeof arg === 'object') {
+                try {
+                    // Handle Error objects specially
+                    if (arg instanceof Error) {
+                        return `${arg.name}: ${arg.message}${arg.stack ? '\n' + arg.stack : ''}`;
+                    }
+
+                    // For other objects, try safe stringify
+                    return JSON.stringify(arg, null, 2);
+                } catch (error) {
+                    // Fallback for objects that can't be stringified
+                    return `[Object: ${arg.constructor?.name || 'Unknown'}]`;
+                }
+            }
+
+            return String(arg);
+        };
+
         const formattedMessage = args.length > 0
-            ? `${message} ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')}`
+            ? `${message} ${args.map(formatArg).join(' ')}`
             : message;
 
         const logEntry = `[${timestamp}] [${levelName}] ${formattedMessage}`;
@@ -59,7 +84,7 @@ export class Logger {
         // Log to VSCode output panel
         this.outputChannel.appendLine(logEntry);
 
-        // Show error messages in VSCode notifications
+        // Show error messages in VSCode notifications (without args for cleaner display)
         if (level === LogLevel.ERROR) {
             vscode.window.showErrorMessage(`SiYuanFS Error: ${message}`);
         }
