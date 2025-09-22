@@ -167,13 +167,8 @@ export class SiYuanApiClient {
     if (path.endsWith('.md')) {
       processingPath = path.slice(0, -3) + '.sy';
     }
-
-    await this.request('/api/file/setFileContent', {
-      path: processingPath,
-      content,
-      create: options?.create ?? true,
-      overwrite: options?.overwrite ?? true,
-    });
+    this.logger.debug('setFileContent', { path, content, options });
+    // 111
   }
 
   async removeFile(path: string): Promise<void> {
@@ -328,8 +323,21 @@ export class SiYuanApiClient {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const result = await response.json();
-    return result as T;
+    const responseText = await response.text();
+    try {
+      const result = JSON.parse(responseText);
+      return result as T;
+    } catch (jsonError) {
+      this.logger.error(
+        `JSON parsing failed for ${endpoint}. Response: ${responseText.substring(0, 500)}`,
+        jsonError,
+      );
+      throw new Error(
+        `Invalid JSON response from ${endpoint}: ${
+          jsonError instanceof Error ? jsonError.message : String(jsonError)
+        }`,
+      );
+    }
   }
 
   updateConfig(config: Partial<SiYuanFSConfig>): void {

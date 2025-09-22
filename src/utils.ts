@@ -5,7 +5,7 @@ import { Logger } from './logger';
 
 export function logAndThrow(logger: Logger, message: string): never {
   const stack = new Error().stack?.split('\n').slice(3, 8).join('\n') || 'No stack trace available';
-  logger.error(`${message}\nStack trace:\n${stack}`);
+  logger.error(`${message}:\n${stack}`);
   throw new Error(message);
 }
 
@@ -14,7 +14,7 @@ export function logAndThrowVscodeError(logger: Logger, uri: vscode.Uri, errorTyp
   const errorToLog = errorMessage || `${errorType}: ${uri.toString()}`;
 
   const stack = new Error().stack?.split('\n').slice(3, 8).join('\n') || 'No stack trace available';
-  logger.error(`${errorToLog}\nStack trace:\n${stack}`);
+  logger.error(`${errorToLog}:\n${stack}`);
 
   switch (errorType) {
     case 'FileNotFound':
