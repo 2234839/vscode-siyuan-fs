@@ -140,11 +140,7 @@ export class SiYuanApiClient {
   }
 
   async getFileContent(path: string): Promise<string> {
-    // Convert path to get the block ID
-    const { realPath } = await this.convertPathToRealPath(path);
-
-    // Extract block ID from realPath (remove .sy extension if present)
-    let blockId = realPath.split('/').pop()!.replace(/\.sy$/, '');
+    const blockId = await this.getBlockIdFromPath(path);
 
     const response = await this.request<{
       data: {
@@ -162,13 +158,22 @@ export class SiYuanApiClient {
     content: string,
     options?: { create?: boolean; overwrite?: boolean },
   ): Promise<void> {
-    // Handle .md files by converting to .sy for processing
-    let processingPath = path;
-    if (path.endsWith('.md')) {
-      processingPath = path.slice(0, -3) + '.sy';
+    this.logger.debug('🧨setFileContent', { path, content, options });
+
+    // For updating existing files, use updateBlock API
+    if (options?.overwrite) {
+      const blockId = await this.getBlockIdFromPath(path);
+
+      await this.request('/api/block/updateBlock', {
+        dataType: 'markdown',
+        id: blockId,
+        data: content,
+      });
+      return;
     }
-    this.logger.debug('setFileContent', { path, content, options });
-    // 111
+
+    // For creating new files, this will be implemented later
+    throw new Error('Create new file not implemented yet');
   }
 
   async removeFile(path: string): Promise<void> {
@@ -221,10 +226,7 @@ export class SiYuanApiClient {
         logAndThrow(this.logger, `getFileStats 此路径不存在于 notebookCache:${path}`);
       }
     }
-    const { realPath } = await this.convertPathToRealPath(path);
-
-    // Extract block ID from realPath
-    const blockId = realPath.split('/').pop()!.replace(/\.sy$/, '');
+    const blockId = await this.getBlockIdFromPath(path);
 
     // Query the blocks table directly for document info
     const sqlResponse = await this.request<{
@@ -349,6 +351,16 @@ export class SiYuanApiClient {
   }
 
   // Utility methods for ID resolution
+
+  /**
+   * Extract block ID from path
+   * @param path File path (e.g., '/notebook/doc.md')
+   * @returns Block ID for the document
+   */
+  async getBlockIdFromPath(path: string): Promise<string> {
+    const { realPath } = await this.convertPathToRealPath(path);
+    return realPath.split('/').pop()!.replace(/\.sy$/, '');
+  }
 
   /**
    * Convert human-readable path to SiYuan real path with IDs

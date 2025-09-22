@@ -8,7 +8,7 @@ async function testSiYuanAPI() {
   };
 
   try {
-    const notebooksUrl = new URL('/api/filetree/getIDsByHPath', config.baseUrl);
+    const notebooksUrl = new URL('/api/block/updateBlock', config.baseUrl);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -22,10 +22,17 @@ async function testSiYuanAPI() {
       method: 'POST',
       headers,
       body: JSON.stringify({
-          "path": "/index",
-          "notebook": "20210816161940-zo21go1"
+        dataType: 'markdown',
+        id: '20250921183317-3pmpdqj',
+        data: `/图22
+{: id="20250921183317-3pmpdqj" updated="20250921183322"}
+
+{: id="20250921183432-4s64yby" updated="20250921183432"}
+
+{: id="20250905151250-61qkldk" title="test" title-img="background-image:linear-gradient(to top, #e14fad 0%, #f9d423 100%)" type="doc" updated="20250921183605"}`,
       }),
     });
+
     notebooksResponse
       .then((r) => r.json())
       .then((r: any) => {
