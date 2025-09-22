@@ -2,11 +2,7 @@
 
 import { SiYuanFSConfig, SiYuanFSFile } from './constants';
 import { Logger } from './logger';
-
-function logAndThrow(logger: Logger, message: string): never {
-  logger.error(message);
-  throw new Error(message);
-}
+import { logAndThrow } from './utils';
 
 export class SiYuanApiClient {
   private config: SiYuanFSConfig;

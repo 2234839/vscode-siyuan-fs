@@ -76,10 +76,7 @@ export class Logger {
             ? `${message} ${args.map(formatArg).join(' ')}`
             : message;
 
-        const logEntry = `[${timestamp}] [${levelName}] ${formattedMessage}`;
-
-        // Always log to console for debugging with colors
-        this.logToConsole(logEntry, level);
+        const logEntry = `[${timestamp}] ${formattedMessage}`;
 
         // Log to VSCode output panel with ANSI colors
         this.logToOutputPanel(logEntry, level);
@@ -90,26 +87,13 @@ export class Logger {
         }
     }
 
-    private logToConsole(logEntry: string, level: LogLevel): void {
-        const colors = {
-            [LogLevel.DEBUG]: '\x1b[90m', // Gray
-            [LogLevel.INFO]: '\x1b[36m',   // Cyan
-            [LogLevel.WARN]: '\x1b[33m',   // Yellow
-            [LogLevel.ERROR]: '\x1b[31m'   // Red
-        };
-
-        const reset = '\x1b[0m';
-        const color = colors[level] || '';
-
-        console.log(`${color}${logEntry}${reset}`);
-    }
 
     private logToOutputPanel(logEntry: string, level: LogLevel): void {
         const symbols = {
             [LogLevel.DEBUG]: '🔍',
             [LogLevel.INFO]: 'ℹ️',
             [LogLevel.WARN]: '⚠️',
-            [LogLevel.ERROR]: '❌'
+            [LogLevel.ERROR]: '🐞'
         };
 
         const symbol = symbols[level] || '';

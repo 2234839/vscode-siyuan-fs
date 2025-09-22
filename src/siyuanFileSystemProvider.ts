@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { SIYUANFS_SCHEME, SiYuanFSConfig, SiYuanFSFile as SiYuanFSFileData } from './constants';
 import { SiYuanFSHttpClient } from './SiYuanFSHttpClient';
 import { Logger } from './logger';
+import { logAndThrowVscodeError } from './utils';
 
 export class SiYuanFSFile implements vscode.FileStat {
     type: vscode.FileType;
@@ -44,7 +45,7 @@ export class SiYuanFS implements vscode.FileSystemProvider {
             const fileData = await this.client.getFileStats(path);
             return new SiYuanFSFile(fileData, path);
         } catch (error) {
-            throw vscode.FileSystemError.FileNotFound(uri);
+            logAndThrowVscodeError(this.logger, uri, 'FileNotFound');
         }
     }
 
@@ -77,7 +78,7 @@ export class SiYuanFS implements vscode.FileSystemProvider {
             const content = await this.client.readFile(path);
             return new TextEncoder().encode(content);
         } catch (error) {
-            throw vscode.FileSystemError.FileNotFound(uri);
+            logAndThrowVscodeError(this.logger, uri, 'FileNotFound');
         }
     }
 
@@ -90,11 +91,11 @@ export class SiYuanFS implements vscode.FileSystemProvider {
             this._fireSoon({ type: vscode.FileChangeType.Changed, uri });
         } catch (error: any) {
             if (error.message.includes('exists')) {
-                throw vscode.FileSystemError.FileExists(uri);
+                logAndThrowVscodeError(this.logger, uri, 'FileExists');
             } else if (error.message.includes('not found')) {
-                throw vscode.FileSystemError.FileNotFound(uri);
+                logAndThrowVscodeError(this.logger, uri, 'FileNotFound');
             } else {
-                throw vscode.FileSystemError.Unavailable(error.message);
+                logAndThrowVscodeError(this.logger, uri, 'Unavailable', error);
             }
         }
     }
@@ -122,7 +123,7 @@ export class SiYuanFS implements vscode.FileSystemProvider {
                 { type: vscode.FileChangeType.Created, uri: newUri }
             );
         } catch (error: any) {
-            throw vscode.FileSystemError.Unavailable(error.message);
+            logAndThrowVscodeError(this.logger, oldUri, 'Unavailable', error);
         }
     }
 
@@ -142,7 +143,7 @@ export class SiYuanFS implements vscode.FileSystemProvider {
             await this.client.createDirectory(path);
             this._fireSoon({ type: vscode.FileChangeType.Created, uri });
         } catch (error: any) {
-            throw vscode.FileSystemError.Unavailable(error.message);
+            logAndThrowVscodeError(this.logger, uri, 'Unavailable', error.message);
         }
     }
 
@@ -150,7 +151,7 @@ export class SiYuanFS implements vscode.FileSystemProvider {
 
     private getPathFromUri(uri: vscode.Uri): string {
         if (uri.scheme !== SIYUANFS_SCHEME) {
-            throw new Error(`Invalid URI scheme: ${uri.scheme}`);
+            logAndThrowVscodeError(this.logger, uri, 'Unavailable', `Invalid URI scheme: ${uri.scheme}`);
         }
         const path = uri.path || '/';
         return path;
